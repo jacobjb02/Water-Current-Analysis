@@ -3,11 +3,11 @@ library(ggplot2)
 library(dplyr)
 
 
-dat <- read_csv("Example Data/trial_results.csv")
+dat <- read_csv("Example Data/trial_results_120_current.csv")
 
 dat$ball_error_x <- dat$final_ball_pos_x - dat$target_position_x
 
-plot(x = dat$trial_num, y = dat$ball_error_, shape = dat$target_hit)
+plot(x = dat$trial_num, y = dat$ball_error_x)
 
 dat$abs_ball_error_x <- abs(dat$ball_error_x)
 
@@ -15,6 +15,8 @@ dat$abs_ball_error_x <- abs(dat$ball_error_x)
 plt1 <- ggplot(dat, aes(x = trial_num, y = abs_ball_error_x, fill = as.factor(target_hit))) +
   geom_col(width = 0.8, alpha = 0.8) +  # Use geom_col() for bar plot
   theme_minimal(base_size = 14) +
+  geom_vline(xintercept = 37, linetype = 'dashed') +
+  geom_vline(xintercept = 210, linetype = 'dashed') +
   labs(
     x = "Trial Number",
     y = "Absolute Ball Error (X)",
@@ -27,12 +29,14 @@ plt1 <- ggplot(dat, aes(x = trial_num, y = abs_ball_error_x, fill = as.factor(ta
     panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
     panel.grid.minor = element_blank()
   )
-
+plt1
 ggsave("abs_ball_error_x.png", plot = plt1)
 
 plt2 <- ggplot(dat, aes(x = trial_num, y = ball_error_x, fill = as.factor(target_hit))) +
   geom_col(width = 0.8, alpha = 0.8) +  # Use geom_col() for bar plot
   theme_minimal(base_size = 14) +
+  geom_vline(xintercept = 37, linetype = 'dashed') +
+  geom_vline(xintercept = 210, linetype = 'dashed') +
   labs(
     x = "Trial Number",
     y = "Ball Error (X)",
@@ -45,7 +49,7 @@ plt2 <- ggplot(dat, aes(x = trial_num, y = ball_error_x, fill = as.factor(target
     panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
     panel.grid.minor = element_blank()
   )
-
+plt2
 ggsave("ball_error_x.png", plot = plt2)
 
 
