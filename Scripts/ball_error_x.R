@@ -5,7 +5,7 @@ library(ggplot2)
 library(dplyr)
 
 # load data
-dat <- read_csv("Example Data/trial_results_120_current.csv")
+dat<- read_csv("Pilot Data/J/trial_results_single_target_1.csv")
 
 # load save path
 save_path <- "Figures/Pilot"
@@ -35,8 +35,11 @@ dat$abs_ball_error_x <- abs(dat$ball_error_x)
 plt1 <- ggplot(dat, aes(x = trial_num, y = abs_ball_error_x, fill = as.factor(target_hit))) +
   geom_col(width = 0.8, alpha = 0.8) +
   theme_minimal(base_size = 14) +
-  geom_vline(xintercept = 37, linetype = 'dashed') +
-  geom_vline(xintercept = 210, linetype = 'dashed') +
+  geom_vline(xintercept = 25, linetype = 'dashed') + # dashed line = invisible trials start
+  geom_vline(xintercept = 31, linetype = 'solid') + # solid line = water current trials start
+  geom_vline(xintercept = 151, linetype = 'dashed') + # dashed line = invisible trials start
+  geom_vline(xintercept = 163, linetype = 'solid') + # solid line = water current trials start
+  geom_vline(xintercept = 175, linetype = 'dashed') + # dashed line = invisible trials start
   labs(
     x = "Trial Number",
     y = "Absolute Ball Error (X)",
@@ -57,8 +60,11 @@ ggsave("abs_ball_error_x.png", path = save_path, plot = plt1)
 plt2 <- ggplot(dat, aes(x = trial_num, y = ball_error_x, fill = as.factor(target_hit))) +
   geom_col(width = 0.8, alpha = 0.8) +  
   theme_minimal(base_size = 14) +
-  geom_vline(xintercept = 37, linetype = 'dashed') +
-  geom_vline(xintercept = 210, linetype = 'dashed') +
+  geom_vline(xintercept = 25, linetype = 'dashed') + # dashed line = invisible trials start
+  geom_vline(xintercept = 31, linetype = 'solid') + # solid line = water current trials start
+  geom_vline(xintercept = 151, linetype = 'dashed') + # dashed line = invisible trials start
+  geom_vline(xintercept = 163, linetype = 'solid') + # solid line = water current trials start
+  geom_vline(xintercept = 175, linetype = 'dashed') + # dashed line = invisible trials start
   labs(
     x = "Trial Number",
     y = "Ball Error (X)",
@@ -76,6 +82,7 @@ plt2 <- ggplot(dat, aes(x = trial_num, y = ball_error_x, fill = as.factor(target
 plt2
 ggsave("ball_error_x.png", path = save_path, plot = plt2)
 
+sum(dat$target_hit == 'TRUE') / sum(dat$trial_num) * 100
 
 # Boxplots showing ball_error_x within targets (all trials)
 plt3 <- ggplot(dat, aes(x = as.factor(target_angle), y = ball_error_x, color = as.factor(target_angle))) +
@@ -101,8 +108,11 @@ ggsave("ball_error_x_boxplot.png", path = save_path,  plot = plt3)
 plt4 <- ggplot(dat, aes(x = trial_num, y = launch_Speed, fill = as.factor(target_hit))) +
   geom_col(width = 0.8, alpha = 0.8) +  
   theme_minimal(base_size = 14) +
-  geom_vline(xintercept = 37, linetype = 'dashed') +
-  geom_vline(xintercept = 210, linetype = 'dashed') +
+  geom_vline(xintercept = 25, linetype = 'dashed') + # dashed line = invisible trials start
+  geom_vline(xintercept = 31, linetype = 'solid') + # solid line = water current trials start
+  geom_vline(xintercept = 151, linetype = 'dashed') + # dashed line = invisible trials start
+  geom_vline(xintercept = 163, linetype = 'solid') + # solid line = water current trials start
+  geom_vline(xintercept = 175, linetype = 'dashed') + # dashed line = invisible trials start
   labs(
     x = "Trial Number",
     y = "Launch Speed [m/s]",
@@ -125,8 +135,11 @@ ggsave("launch_speed_trials.png", path = save_path, plot = plt4)
 plt5 <- ggplot(dat, aes(x = trial_num, y = launch_angle, fill = as.factor(target_hit))) +
   geom_col(width = 0.8, alpha = 0.8) +  
   theme_minimal(base_size = 14) +
-  geom_vline(xintercept = 37, linetype = 'dashed') +
-  geom_vline(xintercept = 210, linetype = 'dashed') +
+  geom_vline(xintercept = 25, linetype = 'dashed') + # dashed line = invisible trials start
+  geom_vline(xintercept = 31, linetype = 'solid') + # solid line = water current trials start
+  geom_vline(xintercept = 151, linetype = 'dashed') + # dashed line = invisible trials start
+  geom_vline(xintercept = 163, linetype = 'solid') + # solid line = water current trials start
+  geom_vline(xintercept = 175, linetype = 'dashed') + # dashed line = invisible trials start
   labs(
     x = "Trial Number",
     y = "Launch Angle (°)",
@@ -145,6 +158,8 @@ plt5
 ggsave("launch_angle_trials.png", path = save_path, plot = plt5)
 
 
+
+# needs to be updated for new paradigms.......
 # filter each phase of experiment
 dat_baseline <- filter(dat, trial_num < 37)
 dat_exposure <- filter(dat, trial_num > 36 & trial_num < 211)
