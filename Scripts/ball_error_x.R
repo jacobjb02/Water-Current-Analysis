@@ -22,7 +22,7 @@ colnames(dat)[which(names(dat) == "water_speed_m/s")] <- "water_speed_m_s"
 dat$water_speed_m_s <- as.factor(dat$water_speed_m_s)
 dat$target_angle <- as.factor(dat$target_angle)
 
-# create abs_ball_error_xhttp://127.0.0.1:14027/graphics/plot_zoom_png?width=2544&height=1330
+# create abs_ball_error_x
 dat$abs_ball_error_x <- abs(dat$ball_error_x)
 
 
@@ -97,6 +97,54 @@ ggsave("ball_error_x_boxplot.png", path = save_path,  plot = plt3)
 
 
 
+
+plt4 <- ggplot(dat, aes(x = trial_num, y = launch_Speed, fill = as.factor(target_hit))) +
+  geom_col(width = 0.8, alpha = 0.8) +  
+  theme_minimal(base_size = 14) +
+  geom_vline(xintercept = 37, linetype = 'dashed') +
+  geom_vline(xintercept = 210, linetype = 'dashed') +
+  labs(
+    x = "Trial Number",
+    y = "Launch Speed [m/s]",
+    fill = "Target Hit",
+    title = "Launch Speed [m/s] Across Trials - Faceted by Target Angle",
+    subtitle = "Bar height represents launch speed per trial"
+  ) +
+  theme(
+    legend.position = "top",
+    panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
+    panel.grid.minor = element_blank()
+  ) +
+  facet_wrap(~target_angle)  
+plt4
+
+ggsave("launch_speed_trials.png", path = save_path, plot = plt4)
+
+
+
+plt5 <- ggplot(dat, aes(x = trial_num, y = launch_angle, fill = as.factor(target_hit))) +
+  geom_col(width = 0.8, alpha = 0.8) +  
+  theme_minimal(base_size = 14) +
+  geom_vline(xintercept = 37, linetype = 'dashed') +
+  geom_vline(xintercept = 210, linetype = 'dashed') +
+  labs(
+    x = "Trial Number",
+    y = "Launch Angle (°)",
+    fill = "Target Hit",
+    title = "Launch Angle Across Trials - Faceted by Target Angle",
+    subtitle = "Bar height represents launch speed per trial"
+  ) +
+  theme(
+    legend.position = "top",
+    panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
+    panel.grid.minor = element_blank()
+  ) +
+  facet_wrap(~target_angle)  
+plt5
+
+ggsave("launch_angle_trials.png", path = save_path, plot = plt5)
+
+
 # filter each phase of experiment
 dat_baseline <- filter(dat, trial_num < 37)
 dat_exposure <- filter(dat, trial_num > 36 & trial_num < 211)
@@ -127,22 +175,6 @@ dat_washout %>%
   group_by(target_angle) %>%
   summarise(mean_ball_error_x = mean(ball_error_x, na.rm = TRUE), var_ball_error_x = var(ball_error_x, na.rm = TRUE))
 
-
-ggplot(dat, aes(x = launch_Speed, y = abs_ball_error_x)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = FALSE, color = "blue") +
-  labs(title = "Effect of Launch Speed on Absolute Ball Error_X",
-       x = "Launch Speed",
-       y = "Absolute Ball Error_X") +
-  theme_minimal()
-
-ggplot(dat, aes(x = launch_angle, y = ball_error_x)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = FALSE, color = "red") +
-  labs(title = "Effect of Launch Angle on Signed Ball Error_X",
-       x = "Launch Angle",
-       y = "Ball Error_X") +
-  theme_minimal()
 
 
 # linear models illustrating the effect of launch speed and angle on ball_error_x
