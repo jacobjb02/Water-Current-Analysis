@@ -2,28 +2,38 @@
 # libraries
 library(readr)
 library(ggplot2)
+library(viridis)
 library(dplyr)
 
-# load data
-dat<- read_csv("Pilot Data/J/trial_results_single_target_1.csv")
+# variables:
+text_size = 12
 
+# load data
+dat_1 <- read.csv('Pilot Data/R/trial_results_R_strong.csv')
+
+dat_2 <- read.csv('Pilot Data/J/trial_results_40_current_0_target.csv')
+dat_2$ppid[dat_2$ppid == "123"] <- "124"
+
+dat_combined <- rbind(dat_1, dat_2)
+
+  
 # load save path
 save_path <- "Figures/Pilot"
 
 # create ball_error_x variable
-dat$ball_error_x <- dat$final_ball_pos_x - dat$target_position_x
+dat_combined$ball_error_x <- dat_combined$final_ball_pos_x - dat_combined$target_position_x
 
 # change launch angle to a numerical variable
-dat$launch_angle <- as.numeric(dat$launch_angle)
-str(dat$launch_angle)
+dat_combined$launch_angle <- as.numeric(dat_combined$launch_angle)
+str(dat_combined$launch_angle)
 
 # rename water_speed_m/s to water_speed_m_s
-colnames(dat)[which(names(dat) == "water_speed_m/s")] <- "water_speed_m_s"
-dat$water_speed_m_s <- as.factor(dat$water_speed_m_s)
-dat$target_angle <- as.factor(dat$target_angle)
+colnames(dat_combined)[which(names(dat_combined) == "water_speed_m/s")] <- "water_speed_m_s"
+dat_combined$water_speed_m_s <- as.factor(dat_combined$water_speed_m_s)
+dat_combined$target_angle <- as.factor(dat_combined$target_angle)
 
 # create abs_ball_error_x
-dat$abs_ball_error_x <- abs(dat$ball_error_x)
+dat_combined$abs_ball_error_x <- abs(dat_combined$ball_error_x)
 
 
 
@@ -156,6 +166,31 @@ plt5 <- ggplot(dat, aes(x = trial_num, y = launch_angle, fill = as.factor(target
 plt5
 
 ggsave("launch_angle_trials.png", path = save_path, plot = plt5)
+
+
+plt6 <- dat_combined %>%
+  ggplot(aes(
+    x = launch_angle,
+    y = launch_Speed,
+    size = -water_speed_m.s,
+    color = ball_error_x
+  )) +
+  geom_point(alpha = 0.7, stroke = 0) +  
+  theme_classic() +
+  scale_size_continuous(range = c(2, 6)) +  
+  scale_color_viridis_c() +  
+  labs(
+    x = "Launch Angle [°]",
+    y = "Throw Speed [m/s]",
+    size = "Water Speed [m/s]",  
+    color = "Ball Error [x]"
+  ) +
+  theme(
+    legend.position = "right",
+    text = element_text(size = 14)
+  )
+
+plt6
 
 
 
