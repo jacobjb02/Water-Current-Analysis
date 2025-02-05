@@ -9,13 +9,13 @@ library(dplyr)
 text_size = 12
 
 # load data
-dat_1 <- read.csv('Pilot Data/R/trial_results_R_strong.csv')
+dat_1 <- read.csv('Pilot Data/J/trial_results_longer_paradigm.csv')
 
-dat_2 <- read.csv('Pilot Data/J/trial_results_40_current_0_target.csv')
-dat_2$ppid[dat_2$ppid == "123"] <- "124"
+#dat_2 <- read.csv('Pilot Data/J/trial_results_40_current_0_target.csv')
+#dat_2$ppid[dat_2$ppid == "123"] <- "124"
+#dat_combined <- rbind(dat_1, dat_2)
 
-dat_combined <- rbind(dat_1, dat_2)
-
+dat_combined <- dat_1
   
 # load save path
 save_path <- "Figures/Pilot"
@@ -28,7 +28,7 @@ dat_combined$launch_angle <- as.numeric(dat_combined$launch_angle)
 str(dat_combined$launch_angle)
 
 # rename water_speed_m/s to water_speed_m_s
-colnames(dat_combined)[which(names(dat_combined) == "water_speed_m/s")] <- "water_speed_m_s"
+colnames(dat_combined)[which(names(dat_combined) == "water_speed_m.s")] <- "water_speed_m_s"
 dat_combined$water_speed_m_s <- as.factor(dat_combined$water_speed_m_s)
 dat_combined$target_angle <- as.factor(dat_combined$target_angle)
 
@@ -41,44 +41,52 @@ dat_combined$abs_ball_error_x <- abs(dat_combined$ball_error_x)
 
 
 
-# Bar graph showing absolute ball_error_x across all trials
-plt1 <- ggplot(dat, aes(x = trial_num, y = abs_ball_error_x, fill = as.factor(target_hit))) +
-  geom_col(width = 0.8, alpha = 0.8) +
+# graph showing absolute ball_error_x across all trials
+plt1 <- ggplot(dat_combined, aes(x = trial_num, y = abs_ball_error_x)) +
+  
+  # Add points with color based on target_hit
+  geom_point(aes(color = as.factor(target_hit)), alpha = 0.8) +  
+  
   theme_minimal(base_size = 14) +
-  geom_vline(xintercept = 25, linetype = 'dashed') + # dashed line = invisible trials start
-  geom_vline(xintercept = 31, linetype = 'solid') + # solid line = water current trials start
-  geom_vline(xintercept = 151, linetype = 'dashed') + # dashed line = invisible trials start
-  geom_vline(xintercept = 163, linetype = 'solid') + # solid line = water current trials start
-  geom_vline(xintercept = 175, linetype = 'dashed') + # dashed line = invisible trials start
+  
+  # Add vertical lines at specific trials, colored by water_speed_m_s
+  geom_vline(data = dat_combined %>% filter(trial_num %in% c(61, 67, 307, 313, 325, 331, 343, 349, 361, 367, 379)), 
+             aes(xintercept = trial_num, color = as.factor(water_speed_m_s), linetype = as.factor(type)), 
+             size = 1.5, alpha = 0.5) +
+  
   labs(
     x = "Trial Number",
-    y = "Absolute Ball Error (X)",
+    y = "Ball Error (X)",
     fill = "Target Hit",
-    title = "Ball Error (X) Across Trials",
-    subtitle = "Bar height represents error magnitude per trial"
+    color = "Water Speed (m/s)",  # Added legend label for color mapping
+    title = "Ball Error (X) Across Trials - Faceted by Target Angle",
+    subtitle = "Data points with curves highlighting key transitions"
   ) +
   theme(
     legend.position = "top",
     panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
     panel.grid.minor = element_blank()
-  ) + facet_wrap(~target_angle)
+  ) +
+  facet_wrap(~target_angle)
+
 plt1
 ggsave("abs_ball_error_x.png", path = save_path, plot = plt1)
 
 
 # Bar graph showing ball_error_x across all trials (faceted by target angle)
-plt2 <- ggplot(dat, aes(x = trial_num, y = ball_error_x, fill = as.factor(target_hit))) +
+plt2 <- ggplot(dat_combined, aes(x = trial_num, y = ball_error_x, fill = as.factor(target_hit))) +
   geom_col(width = 0.8, alpha = 0.8) +  
   theme_minimal(base_size = 14) +
-  geom_vline(xintercept = 25, linetype = 'dashed') + # dashed line = invisible trials start
-  geom_vline(xintercept = 31, linetype = 'solid') + # solid line = water current trials start
-  geom_vline(xintercept = 151, linetype = 'dashed') + # dashed line = invisible trials start
-  geom_vline(xintercept = 163, linetype = 'solid') + # solid line = water current trials start
-  geom_vline(xintercept = 175, linetype = 'dashed') + # dashed line = invisible trials start
+  
+  # Add vertical lines at specific trials, colored by water_speed_m_s
+  geom_vline(data = dat_combined %>% filter(trial_num %in% c(61, 67, 307, 313, 325, 331, 343, 349, 361, 367, 379)), 
+             aes(xintercept = trial_num, color = as.factor(water_speed_m_s), linetype = as.factor(type)), 
+             size = 1.5, alpha = 0.5) +
   labs(
     x = "Trial Number",
     y = "Ball Error (X)",
     fill = "Target Hit",
+    color = "Water Speed (m/s)",  # Added legend label for color mapping
     title = "Ball Error (X) Across Trials - Faceted by Target Angle",
     subtitle = "Bar height represents error magnitude per trial"
   ) +
@@ -87,7 +95,9 @@ plt2 <- ggplot(dat, aes(x = trial_num, y = ball_error_x, fill = as.factor(target
     panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
     panel.grid.minor = element_blank()
   ) +
-  facet_wrap(~target_angle)  
+  facet_wrap(~target_angle)
+
+
 
 plt2
 ggsave("ball_error_x.png", path = save_path, plot = plt2)
