@@ -1,0 +1,928 @@
+---
+title: "Water Physics"
+author: "Jacob J. Boulrice"
+date: "2025-03-23"
+output: html_document
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+# libraries
+library(readr)
+library(ggplot2)
+library(dplyr)
+```
+
+	In the following experiment, participants are tasked with launching a ball across a water current in a virtual environment (VE), with the goal of hitting a target. To succeed, participants must learn the physics parameters of the VE and how these forces interact with the ball’s trajectory, to refine their launch parameters (angle and speed). 
+	
+## Load Simulation Data:
+```{r}
+launch_data_n2 <- read_csv("C:/Users/jacob/OneDrive/Desktop/SMC LAB/Projects/Water-Current-Analysis/simulation_data/launch_data_-2.0/launch_data_-2.0.csv", show_col_types = FALSE)
+
+```
+## Organize Simulation Data:
+```{r}
+# Add factor water_speed_m_s to each df
+launch_data_n2$water_speed_m_s <- factor(rep('-2',nrow(launch_data_n2)))
+
+# check
+head(launch_data_n2)
+```
+
+
+```{r}
+# Combine individual water speed dfs
+launch_data_total <- rbind(launch_data_n2)
+
+
+# round summary df to 2 decimal points
+launch_data_total <- launch_data_total %>%
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+
+```
+
+
+```{r}
+# Change target_angle, target_x_pos, target_z_pos, and target_radius to factors
+launch_data_total <- launch_data_total %>% mutate(across(c(
+  target_angle, target_x_pos, target_z_pos, target_radius), as.factor))
+
+# check
+head(launch_data_total)
+```
+## Summarize Simulation Data and Create New Dataframe:
+```{r}
+summary_launch_data <- launch_data_total %>%
+  group_by(target_angle, target_x_pos, target_z_pos, target_radius, water_speed_m_s) %>%
+    # hit rate
+    mutate(hit_rate = mean(target_hit)*100) %>%
+  filter(target_hit == 'TRUE') %>%
+  group_by(target_angle, target_x_pos, target_z_pos, target_radius, water_speed_m_s, hit_rate) %>%
+  summarise(
+    # minimum speed to hit the target
+    min_speed_hit = min(launch_speed_m_s),
+    # span of angles that hit the target
+    launch_angle_range_hit = max(launch_angle_deg) - min(launch_angle_deg),
+    # launch angle at minimum speed
+    launch_angle_at_min_speed = launch_angle_deg[which.min(launch_speed_m_s)],
+    # Difference between target angle and launch angle at minimum speed
+    min_launch_angle_delta = ( as.numeric(as.character(first(target_angle))) - launch_angle_at_min_speed),
+    # total number of target hits for each parameter
+    total_hits = n(),
+  ) %>%
+  ungroup()
+
+# check
+head(summary_launch_data)
+
+# export df to csv
+write_csv(summary_launch_data, file = 'summary_launch_data.csv')
+```
+
+## Water Speed (m/s) = -1.5
+```{r}
+summary_launch_data_n2 <- summary_launch_data %>%
+  filter(water_speed_m_s == -2) %>%
+  filter(target_z_pos == 1.4) %>%
+  group_by(target_angle, target_x_pos, target_z_pos, target_radius)
+
+
+write_csv(summary_launch_data_n2, "summary_sim_data.csv")
+```
+
+
+# Total Hits Figures
+```{r}
+ #target_x_labs <- c("-0.5", "-0.25", "0")
+ #target_z_labs <- c("-0.5", "-0.25", "0")
+
+# Total hits vs Target radius 
+ggplot(summary_launch_data_n2, 
+       aes(x = target_radius, y = total_hits, 
+           shape = target_z_pos, 
+           color = target_x_pos, 
+           fill = target_x_pos)) +
+  geom_jitter(width = 0, size = 3, alpha = 0.75) +
+  theme_minimal() +
+  labs(title = "Total Hits vs Target Radius", x = "Target Radius", y = "Total Hits")
+
+
+# Hit Rate vs Target radius 
+ggplot(summary_launch_data_n2, 
+       aes(x = target_radius, y = hit_rate, 
+           shape = target_z_pos, 
+           color = target_x_pos, 
+           fill = target_x_pos)) +
+  geom_jitter(width = 0, size = 3, alpha = 0.75) +
+  theme_minimal() +
+  labs(title = "Hit Rate vs Target Radius", x = "Target Radius", y = "Hit Rate")
+```
+
+# Minimum Speed Figures
+```{r}
+# Min Speed vs Target radius 
+ggplot(summary_launch_data_n2, 
+       aes(x = target_radius, y = min_speed_hit, 
+           shape = target_z_pos, 
+           color = target_x_pos, 
+           fill = target_x_pos)) +
+  geom_jitter(width = 0, size = 3, alpha = 0.75) +
+  theme_minimal() +
+  labs(title = "Min Speed vs Target Radius", x = "Target Radius", y = "Min Speed")
+```
+
+# Launch Angle Range Figures
+```{r}
+# Launch Angle Span vs Target radius 
+ggplot(summary_launch_data_n2, 
+       aes(x = target_radius, y = launch_angle_range_hit, 
+           shape = target_z_pos, 
+           color = target_x_pos, 
+           fill = target_x_pos)) +
+  geom_jitter(width = 0, size = 3, alpha = 0.75) +
+  facet_wrap(~ water_speed_m_s) +
+  theme_minimal() +
+  labs(title = "Launch Angle Range vs Target Radius", x = "Target Radius", y = "Launch Angle Range")
+```
+
+# Launch Angle at Minimum Speed Figures
+```{r}
+ggplot(summary_launch_data_n2, 
+       aes(x = target_radius, y = launch_angle_at_min_speed, 
+           shape = target_z_pos, 
+           color = target_x_pos, 
+           fill = target_x_pos)) +
+  geom_jitter(width = 0, size = 3, alpha = 0.75) +
+  facet_wrap(~ water_speed_m_s) +
+  theme_minimal() +
+  labs(title = "Launch Angle at Min Speed vs Target Radius", x = "Target Radius", y = "Launch Angle at Min Speed")
+```
+
+# Angular Difference from Minimum Speed Figures
+```{r}
+ggplot(summary_launch_data_n2, 
+       aes(x = target_radius, y = min_launch_angle_delta, 
+           shape = target_z_pos, 
+           color = target_x_pos, 
+           fill = target_x_pos)) +
+  geom_jitter(width = 0, size = 3, alpha = 0.75) +
+  facet_wrap(~ water_speed_m_s) +
+  theme_minimal() +
+  labs(title = "Angular difference at Min Speed vs Target Radius", x = "Target Radius", y = "Angular difference at Min Speed")
+```
+
+
+
+## Participant Data
+```{r}
+# load participant data
+dat_1 <- read_csv("Data_Summer_25/trial_results_jacob_b.csv")
+
+# Combine data sets
+combined_df <- bind_rows(dat_1, dat_2, dat_3, dat_4, dat_5, dat_6, dat_7, dat_8, dat_9)
+
+combined_df <- combined_df %>%
+  mutate(target_id = case_when(
+    target_position_x == 0   & target_position_z == 1.5  & target_width == 0.151131 ~ "big_target",
+    target_position_x == 0   & target_position_z == 1.25 & target_width == 0.100754 ~ "medium_target",
+    target_position_x == -0.5 & target_position_z == 1.4  & target_width == 0.075566 ~ "small_target",
+    TRUE ~ "unknown"
+  ))
+
+combined_df$target_id <- factor(combined_df$target_id)
+str(combined_df$target_id)
+
+combined_df$ppid <- factor(combined_df$ppid)
+levels(combined_df$ppid)
+
+combined_df$water_speed_binary <- ifelse(combined_df$water_speed_m_s == -2, 1, 0)
+combined_df$water_speed_binary <- factor(combined_df$water_speed_binary)
+str(combined_df$water_speed_binary)
+
+combined_df$target_angle_binary <- ifelse(combined_df$target_angle == -9.7, 1, 0)
+
+
+
+combined_df <- combined_df %>%
+  mutate(width_order_group = case_when(
+    ppid %in% c("p1_t1", "p3_t1", "p5_t1", "p7_t1", "p9_t1") ~ "Wide to Narrow",
+    ppid %in% c("p1_t3", "p4_t3", "p6_t3", "p7_t3") ~ "Narrow to Wide",
+    TRUE ~ "Other"
+  ))
+
+combined_df$width_order_group <- factor(combined_df$width_order_group)
+str(combined_df$width_order_group)
+
+unique(combined_df$width_order_group)
+
+combined_df <- combined_df %>%
+  group_by(ppid) %>%
+  mutate(starting_offcentered = first(target_angle_binary)) %>%
+  ungroup()
+
+combined_df <- combined_df %>%
+  group_by(target_angle) %>%
+  mutate(target_angle_mt = abs(target_angle) + 90) %>%
+  ungroup()
+
+combined_df <- combined_df %>%
+  group_by(ppid) %>%
+  mutate(target_angle_dev = launch_angle - target_angle_mt) %>%
+  ungroup()
+# where target angle dev tells us how much an individual trial launch angle deviates from the true target angle, relative to the origin.
+# Where a launch angle of 90 degrees is directly in front of the participant
+
+
+combined_df <- combined_df %>%
+  mutate(
+    # X is already relative; Z needs centering
+    distance_to_center = sqrt((min_pos_from_target_x)^2 + 
+                              (min_pos_from_target_z - target_position_z)^2),
+    normalized_distance = distance_to_center - target_width
+  )
+
+# scale distance
+combined_df$distance_to_center_std <- scale(combined_df$distance_to_center)
+
+combined_df_water <- combined_df %>%
+  filter(water_speed_m_s != 0)
+
+```
+
+
+
+```{r}
+combined_df_ft <- combined_df %>%
+  arrange(ppid, trial_num) %>%  # Ensure trials are ordered
+  group_by(ppid) %>%
+  mutate(
+    prev_water = lag(water_speed_binary, default = first(water_speed_binary)),
+    transition_to_1 = water_speed_binary == 1 & prev_water == 0,
+    to_delete = transition_to_1 & row_number() > 1  # avoid first row corner case
+  ) %>%
+  ungroup() %>%
+  filter(!to_delete)  # Remove those transition rows
+
+# Tag the rows to delete before filtering
+deleted_trials <- combined_df_ft %>%
+  arrange(ppid, trial_num) %>%
+  group_by(ppid) %>%
+  mutate(
+    prev_water = lag(water_speed_binary, default = first(water_speed_binary)),
+    transition_to_1 = water_speed_binary == 1 & prev_water == 0,
+    to_delete = transition_to_1 & row_number() > 1
+  ) %>%
+  ungroup() %>%
+  filter(to_delete) %>%
+  select(ppid, trial_num, water_speed_binary, prev_water)
+
+# Print trial numbers 
+print(deleted_trials$trial_num)
+
+
+combined_df_ft_water <- combined_df_water %>%
+  filter(water_speed_m_s != 0)
+```
+
+```{r}
+ggplot(combined_df_ft, aes(x = trial_num, y = distance_to_center)) +
+  geom_line() +
+  facet_wrap(~width_order_group)
+
+ggplot(combined_df_ft, aes(x = trial_num, y = distance_to_center)) +
+  geom_line() +
+  facet_wrap(~ppid)
+
+```
+
+
+```{r}
+ggplot(combined_df_ft_water, aes(x = trial_num, y = normalized_distance, color = target_id)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~width_order_group) +
+  labs(title = "Normalized Distance Over Trials by Target Size",
+       x = "Trial Number", y = "Normalized Distance") +
+  theme_minimal()
+
+combined_df_water %>%
+  group_by(trial_num, target_id, width_order_group) %>%
+  summarize(mean_dist = mean(distance_to_center, na.rm = TRUE)) %>%
+  ggplot(aes(x = trial_num, y = mean_dist, color = target_id)) +
+  
+  geom_line(size = 1, alpha = 0.5) +
+  geom_smooth(method = "loess", se = FALSE, span = 0.4) +
+  facet_grid(~width_order_group) +
+  labs(
+    title = "Mean Distance to Target Across Trials",
+    x = "Trial Number",
+    y = "Mean Distance (m)",
+    color = "Target Condition"
+  ) +
+  theme_minimal()
+
+
+```
+## LOESS
+```{r}
+ggplot(combined_df, aes(x = trial_num, y = launch_angle)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", span = 0.3, se = TRUE, color = "blue") +
+  facet_wrap(~ width_order_group) +
+  labs(
+    x = "Trial Number",
+    y = "Launch Angle",
+    title = "Launch Angle vs. Trial Number by Width Order Group (LOESS)"
+  ) +
+  theme_minimal()
+ggsave("loess_angle_trials.png", dpi = 300, width = 12, height = 8, bg = 'white')
+
+
+ggplot(combined_df, aes(x = trial_num, y = launch_Speed)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", span = 0.3, se = TRUE, color = "blue") +
+  facet_wrap(~ width_order_group) +
+  labs(
+    x = "Trial Number",
+    y = "Launch Speed",
+    title = "Launch Speed vs. Trial Number by Width Order Group (LOESS)"
+  ) +
+  theme_minimal()
+ggsave("loess_speed_trials.png", dpi = 300, width = 12, height = 8, bg = 'white')
+```
+
+
+```{r}
+ggplot(combined_df_water, aes(x = block_num, y = normalized_distance, color = target_id)) +
+  geom_point(alpha = 0.6) +  # To show individual points for each trial
+  geom_line(aes(group = target_id), alpha = 0.8) +  # Optional: Connect trials within each target condition
+  facet_wrap(~ width_order_group) +  # Separate by target condition (big, medium, small)
+  labs(
+    title = "Normalized Distance to Target Over Trials (with current)",
+    x = "Trial Number",
+    y = "Distance to Target (m)",
+    color = "Target Condition"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+
+ggsave("min_euclidian_dist_by_group.png", dpi = 300, width = 12, height = 8, bg = 'white')
+
+```
+
+
+
+# Linear Model: Speed
+```{r}
+
+mod_speed <- lm(launch_Speed ~ water_speed_binary * trial_num + width_order_group + target_width, data = combined_df)
+summary(mod_speed)
+```
+
+
+# mixed model: speed
+```{r}
+
+library(lme4)
+mx_mod_speed <- lmer(launch_Speed ~ water_speed_binary * block_num + launch_angle + target_position_x + target_position_z + starting_offcentered * water_speed_binary + (1 + block_num|ppid), data = combined_df, control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5)))
+
+
+
+summary(mx_mod_speed)
+
+#AIC(mx_mod_speed, mod_speed)
+#BIC(mx_mod_speed, mod_speed)
+```
+
+
+```{r}
+# Open PNG
+png("mixed_model_diagnostics_speed.png", width = 1600, height = 1200, res = 200)
+
+# 2x2 layout for plots
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+# Residuals vs Fitted
+plot(fitted(mx_mod_speed), residuals(mx_mod_speed),
+     main = "Residuals vs Fitted",
+     xlab = "Fitted Values", ylab = "Residuals",
+     pch = 20, col = "#1f77b4")
+abline(h = 0, col = "gray")
+
+# QQ Plot
+qqnorm(residuals(mx_mod_speed), main = "Normal Q-Q",
+       pch = 20, col = "#ff7f0e")
+qqline(residuals(mx_mod_speed), col = "gray")
+
+# Scale-Location Plot
+plot(fitted(mx_mod_angle_block_speed),
+     sqrt(abs(residuals(mx_mod_speed))),
+     main = "Scale-Location",
+     xlab = "Fitted Values",
+     ylab = "Sqrt(|Residuals|)",
+     pch = 20, col = "#2ca02c")
+abline(h = 0, col = "gray")
+
+# Histogram of Residuals
+hist(residuals(mx_mod_speed),
+     breaks = 50,
+     main = "Histogram of Residuals",
+     xlab = "Residuals",
+     col = "skyblue", border = "white")
+
+# Close and save file
+dev.off()
+```
+```{r}
+library(performance)
+r2(mx_mod_speed)
+
+confint(mx_mod_speed, method = "boot", nsim = 1000)
+```
+```{r}
+
+# Create prediction grid
+other_vars <- expand.grid(
+  block_num = seq(1, 60, by = 1),
+  water_speed_binary = factor(c(0, 1), levels = c(0,1)),
+  launch_angle = mean(combined_df$launch_angle),
+  ppid = unique(combined_df$ppid),
+  #starting_offcentered = unique(combined_df$starting_offcentered)
+  starting_offcentered = 0
+)
+
+target_combos <- data.frame(
+  target_position_x = c(0, 0, -0.5),
+  target_position_z = c(1.5, 1.25, 1.4)
+)
+
+newdata <- merge(other_vars, target_combos)
+
+# Get predicted launch angles from model with random ppid effects
+newdata$pred_speed <- predict(mx_mod_speed, newdata = newdata)
+
+# label water condition
+newdata$water_condition <- ifelse(newdata$water_speed_binary == 1, "Water Current", "Still-Water")
+
+newdata <- newdata %>%
+  mutate(target_label = paste0("x=", target_position_x, ", z=", target_position_z),
+         target_label = factor(target_label))  # plotting labels
+
+# Plot
+ggplot(newdata, aes(x = block_num, y = pred_speed,
+                    color = target_label, linetype = water_condition,
+             group = interaction(ppid, target_label, water_condition))) +
+  geom_line(size = 1) +
+  facet_wrap(~ ppid, ncol = 3) +
+  labs(title = "Predicted Launch Speed Over Blocks",
+       subtitle = "From Mixed Model: Speed",
+       x = "Block Number",
+       y = "Predicted Launch Speed (m/s)",
+       color = "Target (x,z)",
+       linetype = "Water Condition") +
+  theme_minimal(base_size = 12)
+
+ggsave("predicted_launch_speed_by_participant.png", dpi = 300, width = 12, height = 8, bg = 'white')
+
+
+
+# Plot
+ggplot(newdata, aes(x = block_num, y = pred_speed,
+                         color = water_speed_binary, group = water_speed_binary)) +
+  stat_summary(fun = mean, geom = "line", size = 1.2) +
+  stat_summary(fun.data = mean_se, geom = "ribbon", alpha = 0.2, aes(fill = water_speed_binary)) +
+  scale_color_manual(values = c("red", "blue"), labels = c("Still Water", "Water Current")) + 
+  scale_fill_manual(values = c("red", "blue"), labels = c("Still Water", "Water Current")) +
+  labs(title = "Group-Level Launch Speed Over Blocks",
+       x = "Block Number", y = "Predicted Launch Speed (m/s)",
+       color = "Water Condition", fill = "Water Condition") +
+  theme_minimal()
+
+ggsave("predicted_launch_speed_by_water_current.png", dpi = 300, width = 12, height = 8, bg = 'white')
+
+
+```
+
+
+# Linear Model: Angle
+```{r}
+mod_angle <- lm(launch_angle ~ water_speed_binary * trial_num + width_order_group + target_angle_binary, data = combined_df)
+summary(mod_angle)
+
+plot(mod_angle)
+
+mod_test <- lm(launch_angle ~ water_speed_binary, data = combined_df)
+summary(mod_test)
+
+# Add predicted values for mod_angle
+combined_df$predicted_test <- predict(mod_test, newdata = combined_df)
+str(combined_df$predicted_test)
+
+ggplot(combined_df, aes(x = predicted_test, y = launch_angle)) +
+  geom_point(alpha = 0.5) +
+  facet_grid(~water_speed_binary) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(title = "Predicted vs. Observed Launch Angle",
+       x = "Predicted Launch Angle",
+       y = "Observed Launch Angle") +
+  theme_minimal()
+
+combined_df$residuals <- resid(mod_test)
+
+ggplot(combined_df, aes(x = as.factor(water_speed_binary), y = residuals)) +
+  geom_boxplot() +
+  labs(x = "Water Speed Condition", y = "Residuals") +
+  theme_minimal()
+
+car::leveneTest(residuals ~ factor(water_speed_binary), data = combined_df)
+
+```
+
+```{r}
+
+library(car)
+vif(mod_angle, type = 'predictor')
+
+# Extract residuals
+resid_mod_angle <- residuals(mod_angle)
+
+# testing correlation with residuals (model mispecification)
+cor.test(combined_df$trial_num, resid_mod_angle)
+cor.test(combined_df$water_speed_binary, resid_mod_angle)
+cor.test(combined_df$target_angle_binary, resid_mod_angle)
+
+
+
+# Add predicted values for mod_angle
+combined_df$predicted_angle <- predict(mod_angle, newdata = combined_df)
+str(combined_df$predicted_angle)
+
+ggplot(combined_df, aes(x = predicted_angle, y = launch_angle)) +
+  geom_point(alpha = 0.5) +
+  facet_grid(~water_speed_binary) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(title = "Predicted vs. Observed Launch Angle",
+       x = "Predicted Launch Angle",
+       y = "Observed Launch Angle") +
+  theme_minimal()
+
+```
+# Standardize key variables
+```{r}
+combined_df$target_position_z_std <- scale(combined_df$target_position_z)
+unique(combined_df$target_position_z_std)
+mean(combined_df$target_position_z)
+```
+
+
+## Mixed Models: Angle
+```{r}
+library(lme4)
+library(ggeffects)
+
+# mixed model
+mx_mod_angle_block_speed <- lmer(launch_angle ~ water_speed_binary * block_num + launch_Speed + target_position_x + target_position_z + starting_offcentered * water_speed_binary + (1 + block_num|ppid), data = combined_df, control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5)))
+summary(mx_mod_angle_block_speed)
+
+# comparing mixed model to original model
+#AIC(mx_mod_angle_block_speed, mod_test)
+#BIC(mx_mod_angle_block_speed, mod_test)
+
+
+
+# mixed model
+mx_mod_angle_test <- lmer(launch_angle ~ water_speed_binary * block_num + launch_Speed + target_position_x + target_position_z + starting_offcentered * water_speed_binary * launch_Speed + (1 + block_num|ppid), data = combined_df, control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5)))
+summary(mx_mod_angle_test)
+
+# comparing mixed model to original model
+AIC(mx_mod_angle_block_speed, mx_mod_angle_test)
+BIC(mx_mod_angle_block_speed, mx_mod_angle_test)
+
+library(performance)
+r2(mx_mod_angle_block_speed)
+r2(mx_mod_angle_test)
+```
+
+
+
+```{r}
+# Open PNG
+png("mixed_model_diagnostics.png", width = 1600, height = 1200, res = 200)
+
+# 2x2 layout for plots
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+# Residuals vs Fitted
+plot(fitted(mx_mod_angle_block_speed), residuals(mx_mod_angle_block_speed),
+     main = "Residuals vs Fitted",
+     xlab = "Fitted Values", ylab = "Residuals",
+     pch = 20, col = "#1f77b4")
+abline(h = 0, col = "gray")
+
+# QQ Plot
+qqnorm(residuals(mx_mod_angle_block_speed), main = "Normal Q-Q",
+       pch = 20, col = "#ff7f0e")
+qqline(residuals(mx_mod_angle_block_speed), col = "gray")
+
+# Scale-Location Plot
+plot(fitted(mx_mod_angle_block_speed),
+     sqrt(abs(residuals(mx_mod_angle_block_speed))),
+     main = "Scale-Location",
+     xlab = "Fitted Values",
+     ylab = "Sqrt(|Residuals|)",
+     pch = 20, col = "#2ca02c")
+abline(h = 0, col = "gray")
+
+# Histogram of Residuals
+hist(residuals(mx_mod_angle_block_speed),
+     breaks = 50,
+     main = "Histogram of Residuals",
+     xlab = "Residuals",
+     col = "skyblue", border = "white")
+
+# Close and save file
+dev.off()
+```
+## Launch Angle Mixed Effects Model Equation:
+$$
+\begin{aligned}
+\hat{y}_{ij} \;=\;& 99.02221 \;-\; 32.34682\,\bigl(\text{WaterSpeedBinary}_{ij}\bigr)
+                \;-\; 0.12076\,\bigl(\text{BlockNumber}_{ij}\bigr) \\
+                &\;+\; 5.07287\,\bigl(\text{LaunchSpeed}_{ij}\bigr)
+                \;-\; 36.00173\,\bigl(\text{TargetX}_{ij}\bigr) \\
+                &\;-\; 11.96141\,\bigl(\text{TargetZ}_{ij}\bigr)
+                \;-\; 0.22356\,\bigl(\text{StartingOffcentered}_{ij}\bigr) \\
+                &\;+\; 0.23348\,\bigl(\text{WaterSpeedBinary}_{ij} \times \text{BlockNumber}_{ij}\bigr) \\
+                &\;-\; 5.74310\,\bigl(\text{WaterSpeedBinary}_{ij} \times \text{StartingOffcentered}_{ij}\bigr) \\
+                &\;+\; b_{0i} \;+\; b_{1i}\,\bigl(\text{BlockNumber}_{ij}\bigr) \;+\; \epsilon_{ij}.
+\end{aligned}
+$$
+
+```{r}
+r2(mx_mod_angle_block_speed)
+
+confint(mx_mod_angle_block_speed, method = "boot", nsim = 1000)
+```
+
+```{r}
+
+# Create prediction grid
+other_vars <- expand.grid(
+  block_num = seq(1, 60, by = 1),
+  water_speed_binary = factor(c(0, 1), levels = c(0,1)),
+  launch_Speed = mean(combined_df$launch_Speed),
+  ppid = unique(combined_df$ppid),
+  starting_offcentered = unique(combined_df$starting_offcentered)
+)
+
+target_combos <- data.frame(
+  target_position_x = c(0, 0, -0.5),
+  target_position_z = c(1.5, 1.25, 1.4)
+)
+
+newdata <- merge(other_vars, target_combos)
+
+# Get predicted launch angles from model with random ppid effects
+newdata$pred_angle <- predict(mx_mod_angle_block_speed, newdata = newdata)
+
+# label water condition
+newdata$water_condition <- ifelse(newdata$water_speed_binary == 1, "Water Current", "Still-Water")
+
+newdata <- newdata %>%
+  mutate(target_label = paste0("x=", target_position_x, ", z=", target_position_z),
+         target_label = factor(target_label))  # plotting labels
+
+newdata <- newdata %>% 
+  filter(
+    (target_position_x == 0 & starting_offcentered == 0) |
+      (target_position_x != 0 & starting_offcentered == 1)
+  )
+
+# Plot
+ggplot(newdata, aes(x = block_num, y = pred_angle,
+                    color = target_label, linetype = water_condition,
+             group = interaction(ppid, target_label, water_condition))) +
+  geom_line(size = 1) +
+  facet_wrap(~ ppid, ncol = 3) +
+  labs(title = "Predicted Launch Angle Over Blocks",
+       subtitle = "From Mixed Model: Angle",
+       x = "Block Number",
+       y = "Predicted Launch Angle (degrees)",
+       color = "Target (x,z)",
+       linetype = "Water Condition") +
+  theme_minimal(base_size = 12)
+
+ggsave("predicted_launch_angles_by_participant.png", dpi = 300, width = 12, height = 8, bg = 'white')
+
+# Plot
+ggplot(newdata, aes(x = block_num, y = pred_angle,
+                         color = water_speed_binary, group = water_speed_binary)) +
+  stat_summary(fun = mean, geom = "line", size = 1.2) +
+  stat_summary(fun.data = mean_se, geom = "ribbon", alpha = 0.2, aes(fill = water_speed_binary)) +
+  scale_color_manual(values = c("red", "blue"), labels = c("Still Water", "Water Current")) + 
+  scale_fill_manual(values = c("red", "blue"), labels = c("Still Water", "Water Current")) +
+  labs(title = "Group-Level Launch Angle Over Blocks",
+       x = "Block Number", y = "Predicted Launch Angle (°)",
+       color = "Water Condition", fill = "Water Condition") +
+  theme_minimal()
+
+ggsave("predicted_launch_angles_by_water_current.png", dpi = 300, width = 12, height = 8, bg = 'white')
+
+```
+```{r}
+# Create a prediction grid varying block and launch speed
+grid <- expand.grid(
+  block_num = seq(min(combined_df$block_num), max(combined_df$block_num), length.out = 60),
+  launch_Speed = seq(min(combined_df$launch_Speed), max(combined_df$launch_Speed), length.out = 10),
+  water_speed_binary = factor(c(0, 1), levels = c(0, 1))
+)
+
+# Set fixed values for other predictors
+grid$target_position_x <- 0        # or another value of interest
+grid$target_position_z <- 1.5        # or your chosen value
+grid$starting_offcentered <- ifelse(grid$target_position_x == 0, 0, 1)
+grid$ppid <- unique(combined_df$ppid)[1]  # use a reference participant
+
+# Generate model predictions (using fixed effects only)
+grid$pred_angle <- predict(mx_mod_angle_block_speed, newdata = grid, re.form = NA)
+
+# Convert water condition for labeling
+grid$water_condition <- ifelse(grid$water_speed_binary == 1, "Water Current", "Still Water")
+
+# Plot using ggplot2
+ggplot(grid, aes(x = block_num, y = pred_angle, color = as.factor(launch_Speed))) +
+  geom_line(aes(group = launch_Speed), alpha = 0.7) +
+  facet_wrap(~ water_condition, ncol = 1) +
+  scale_color_viridis_d(name = "Launch Speed (binned)") +
+  labs(title = "Predicted Launch Angle Across Blocks",
+       subtitle = "Faceted by Water Condition; color indicates launch speed",
+       x = "Block (Time)",
+       y = "Predicted Launch Angle (degrees)") +
+  theme_minimal(base_size = 12)
+
+```
+
+
+
+
+
+```{r}
+mod_angle_shift <- lmer(target_angle_dev ~ water_speed_binary * block_num * width_order_group * launch_Speed + target_position_x + target_position_z + (1 + block_num|ppid), data = combined_df, control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5)))
+summary(mod_angle_shift)
+
+mod_angle_shift_test_1 <- lmer(target_angle_dev ~ water_speed_binary * block_num * width_order_group * launch_Speed + target_position_x + target_position_z + (1 + block_num|ppid), data = combined_df, control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5)))
+summary(mod_angle_shift)
+
+AIC(mod_angle_shift, mod_angle_shift_test_1)
+BIC(mod_angle_shift, mod_angle_shift_test_1)
+
+
+r2(mod_angle_shift)
+r2(mod_angle_shift_test_1)
+
+ggplot(combined_df, aes(x = trial_num, y = target_angle_dev)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", span = 0.3, se = TRUE, color = "blue") +
+  facet_wrap(~ width_order_group) +
+  labs(
+    x = "Trial Number",
+    y = "Launch Angle-Target Deviation (degrees)",
+    title = "Launch Angle-Target Deviation vs. Trial Number by Width Order Group (LOESS)"
+  ) +
+  theme_minimal()
+ggsave("loess_deviation_trials.png", dpi = 300, width = 12, height = 8, bg = 'white')
+
+```
+
+
+
+```{r}
+ggplot(combined_df, aes(x = launch_angle, y = launch_Speed, color = trial_num)) +
+  geom_point(alpha = 0.5, size = 1.2) +
+  scale_color_viridis_c(option = "plasma", name = "Trial #") +  # cool gradient
+  facet_wrap(~width_order_group) +
+  labs(
+    title = "Trajectory Through 2D Solution Space",
+    subtitle = "Angle vs Speed by Trial, Split by Group",
+    x = "Launch Angle (degrees)",
+    y = "Launch Speed (m/s)"
+  ) +
+  theme_minimal(base_size = 14)
+
+ggsave("launch_angle_speed_by_trial_by_group.png", dpi = 300, width = 10, height = 6, bg = 'white')
+
+```
+# std key vars
+```{r}
+combined_df <- combined_df %>%
+  mutate(
+    block_num_z         = scale(block_num),
+    launch_Speed_z      = scale(launch_Speed),
+    target_angle_dev_z  = scale(target_angle_dev),
+    launch_angle_z = scale(launch_angle),
+    target_width        = factor(target_width),       
+    width_order_group   = factor(width_order_group)     
+  )
+
+
+```
+
+
+# Performance Model:
+
+```{r}
+mod_performance <- lmer(
+  distance_to_center ~ water_speed_binary * block_num +
+    poly(launch_Speed, 2) * water_speed_binary +
+    poly(target_angle_dev, 2) * water_speed_binary +
+    (1 | ppid),
+  data = combined_df,
+  control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5))
+)
+
+
+summary(mod_performance)
+
+r2(mod_performance)
+
+```
+
+
+```{r}
+# Open PNG
+png("mixed_model_diagnostics_performance.png", width = 1600, height = 1200, res = 200)
+
+# 2x2 layout for plots
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+# Residuals vs Fitted
+plot(fitted(mod_performance), residuals(mod_performance),
+     main = "Residuals vs Fitted",
+     xlab = "Fitted Values", ylab = "Residuals",
+     pch = 20, col = "#1f77b4")
+abline(h = 0, col = "gray")
+
+# QQ Plot
+qqnorm(residuals(mod_performance), main = "Normal Q-Q",
+       pch = 20, col = "#ff7f0e")
+qqline(residuals(mod_performance), col = "gray")
+
+# Scale-Location Plot
+plot(fitted(mod_performance),
+     sqrt(abs(residuals(mod_performance))),
+     main = "Scale-Location",
+     xlab = "Fitted Values",
+     ylab = "Sqrt(|Residuals|)",
+     pch = 20, col = "#2ca02c")
+abline(h = 0, col = "gray")
+
+# Histogram of Residuals
+hist(residuals(mod_performance),
+     breaks = 50,
+     main = "Histogram of Residuals",
+     xlab = "Residuals",
+     col = "skyblue", border = "white")
+
+# Close and save file
+dev.off()
+```
+
+```{r}
+
+library(ggeffects)   # for ggpredict()
+library(ggplot2)     # for plotting
+
+# Generate model predictions across target_angle_dev_z, separated by water condition
+preds_angle <- ggpredict(mod_test, 
+                   terms = c("target_angle_dev [all]", "water_speed_binary"))
+
+preds_speed <- ggpredict(mod_test, 
+                   terms = c("launch_Speed [all]", "water_speed_binary"))
+
+
+# Plot
+ggplot(preds_angle, aes(x = x, y = predicted, color = group)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.2, color = NA) +
+  labs(
+    title = "Strategy Shift in Aiming (Angle Deviation) Across Water Conditions",
+    x = "Target Angle Deviation (degrees)",
+    y = "Predicted Distance to Center",
+    color = "Water Current",
+    fill = "Water Current"
+  ) +
+  theme_minimal(base_size = 14)
+
+ggplot(preds_speed, aes(x = x, y = predicted, color = group)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.2, color = NA) +
+  labs(
+    title = "Launch Speed Across Water Conditions",
+    x = "Launch Speed (m/s)",
+    y = "Predicted Distance to Center",
+    color = "Water Current",
+    fill = "Water Current"
+  ) +
+  theme_minimal(base_size = 14)
+
+```
+
