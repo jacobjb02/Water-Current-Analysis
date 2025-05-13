@@ -1,0 +1,756 @@
+---
+title: "performance_mixed_mod"
+author: "Jacob J. Boulrice"
+date: "2025-04-08"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Load Data
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "C:/Users/jacob/OneDrive/Desktop/SMC LAB/Projects/Water-Current-Analysis/Pilot Data/March/figures")
+# libraries
+library(ggeffects)   
+library(ggplot2)
+library(performance)
+library(lme4)
+library(dplyr)
+library(readr)
+library(DescTools)
+
+
+# load participant data
+dat_1 <- read.csv("Pilot Data/March/trial_results_p1_t1.csv")
+dat_2 <- read_csv("Pilot Data/March/trial_results_p2_t3.csv")
+dat_3 <- read_csv("Pilot Data/March/trial_results_p3_t1.csv")
+dat_4 <- read_csv("Pilot Data/March/trial_results_p4_t3.csv")
+dat_5 <- read_csv("Pilot Data/March/trial_results_p5_t1.csv")
+dat_6 <- read_csv("Pilot Data/March/trial_results_p6_t3.csv")
+dat_7 <- read_csv("Pilot Data/March/trial_results_p7_t1.csv")
+dat_8 <- read_csv("Pilot Data/March/trial_results_p8_t3.csv")
+dat_9 <- read_csv("Pilot Data/March/trial_results_p9_t1.csv")
+
+
+# Combine data sets
+combined_df <- bind_rows(dat_2, dat_3,dat_4, dat_5, dat_6, dat_7, dat_8, dat_9) # dat_1
+
+# Create dummy variable for water current on/off
+combined_df$water_speed_binary <- ifelse(combined_df$water_speed_m_s == -2, 1, 0)
+combined_df$water_speed_binary <- factor(combined_df$water_speed_binary)
+#str(combined_df$water_speed_binary)
+
+# Organize participants by group
+combined_df <- combined_df %>%
+  mutate(width_order_group = case_when(
+    ppid %in% c("p1_t1", "p3_t1", "p5_t1", "p7_t1", "p9_t1") ~ "Wide to Narrow",
+    ppid %in% c("p1_t3", "p4_t3", "p6_t3", "p7_t3") ~ "Narrow to Wide",
+    TRUE ~ "Other"
+  ))
+combined_df$width_order_group <- factor(combined_df$width_order_group)
+
+# label targets
+combined_df <- combined_df %>%
+  mutate(target_id = case_when(
+    target_position_x == 0   & target_position_z == 1.5  & target_width == 0.151131 ~ "big_target",
+    target_position_x == 0   & target_position_z == 1.25 & target_width == 0.100754 ~ "medium_target",
+    target_position_x == -0.5 & target_position_z == 1.4  & target_width == 0.075566 ~ "small_target",
+    TRUE ~ "unknown"
+  ))
+
+# fix target angle 
+combined_df <- combined_df %>%
+  mutate(target_angle = 
+           ifelse(target_angle == -9.7, - 19.7,
+                  target_angle))
+
+# rescale target angle to match units with launch angle
+combined_df <- combined_df %>%
+  group_by(target_angle) %>%
+  mutate(target_angle_mt = abs(target_angle) + 90) %>%
+  ungroup()
+
+# Compute launch angle deviation with respect to target angle
+combined_df <- combined_df %>%
+  group_by(ppid) %>%
+  mutate(launch_angle_dev = launch_angle - target_angle_mt) %>%
+  ungroup()
+# where target angle dev tells us how much an individual trial launch angle deviates from the true target angle, relative to the origin.
+# Where a launch angle of 90 degrees is directly in front of the participant
+
+# Compute euclidian distance and normalize with respect to target width
+
+combined_df <- combined_df %>%
+  mutate(
+    ball_error = sqrt((min_pos_from_target_x - target_position_x)^2 +
+                              (min_pos_from_target_z - target_position_z)^2) - target_width
+  )
+
+#normalized_distance = distance_to_center - target_width
+
+summary(combined_df$distance_to_center)
+summary(combined_df$normalized_distance)
+
+# make filtered df for when water speed != 0
+combined_df_water <- combined_df %>%
+  filter(water_speed_m_s != 0)
+
+combined_df_no_water <- combined_df %>%
+  filter(water_speed_m_s == 0)
+
+```
+
+
+
+
+
+
+
+## Functions
+```{r}
+# remove practice trials
+filter_practice <- function(df) {
+  df %>%
+    filter(trial_num > 36)
+}
+
+combined_df_filt <- filter_practice(combined_df)
+
+
+# remove misses
+filter_hits <- function(df) {
+  df %>%
+    filter(target_hit == TRUE)
+}
+
+combined_df_filt <- filter_practice(combined_df)
+combined_df_hits <- filter_hits(combined_df_filt)
+
+
+# convert to cm
+convertColsToCm <- function(df, columns) {
+  df[columns] <- lapply(df[columns], function(x) x * 100)
+  return(df)
+}
+
+combined_df_filt <- convertColsToCm(combined_df_filt, c('distance_from_target', 'ball_error', 'target_width'))
+ 
+```
+
+
+# min distance plot functions
+```{r}
+plot_trial_min_dist_ppid <- function(df) {
+  
+  # Get transition points
+  transition_pts <- df %>%
+    arrange(trial_num) %>%
+    mutate(water_speed_binary_prev = lag(water_speed_binary)) %>%
+    filter(water_speed_binary != water_speed_binary_prev) %>%
+    pull(trial_num)
+  
+  # Plot
+  p <- ggplot(df, aes(
+    x = trial_num,
+    y = ball_error,
+    color = target_id,
+    group = interaction(ppid, target_id)
+  )) +
+    geom_line(size = 0.8, alpha = 0.8) +
+    
+    # Highlight hits (TRUE) with solid points
+    geom_point(data = df %>% filter(target_hit == TRUE),
+               aes(color = target_id),
+               shape = 16, size = 1.5, alpha = 0.9) +
+    
+    # De-emphasize misses (FALSE) with faint hollow circles
+    geom_point(data = df %>% filter(target_hit == FALSE),
+               aes(color = target_id),
+               shape = 1, size = 1.2, alpha = 0.15) +
+
+    coord_cartesian(ylim = c(-1, 50)) +  
+    facet_wrap(~ppid, ncol = 2) +
+    geom_vline(xintercept = transition_pts, linetype = 'dashed', color = "black", alpha = 0.5) +
+    labs(
+      x = "Trial Number",
+      y = "Distance to Target Edge (cm)",
+      color = "Target Size"
+    ) +
+    scale_color_brewer(palette = "Dark2") +
+    theme_minimal(base_size = 13) +
+    theme(
+      legend.position = "bottom",
+      legend.box = "horizontal",
+      strip.text = element_text(face = "bold", size = 11),
+      panel.grid.major.y = element_line(color = "gray85", size = 0.2),
+      panel.grid.minor = element_blank()
+    )
+  
+  # Save
+  ggsave("ppid_min_dist_plot.png", p, width = 16, height = 12, dpi = 300, bg = 'white')
+  
+  p
+}
+
+
+plot_trial_median_dist_edge <- function(df) {
+  
+  # Transition points for vertical line
+  transition_pts <- df %>%
+    arrange(trial_num) %>%
+    mutate(water_speed_binary_prev = lag(water_speed_binary)) %>%
+    filter(water_speed_binary != water_speed_binary_prev) %>%
+    pull(trial_num)
+  
+  # Summary: median per trial per participant
+  df_ind <- df %>%
+    group_by(trial_num, ppid, target_id, width_order_group, water_speed_binary, target_hit) %>%
+    summarize(min_dist = ball_error, na.rm = TRUE, .groups = "drop")
+  
+  # Create plot for individual participant medians as lines
+  p_ind <- ggplot(df_ind, aes(x = trial_num, y = min_dist, 
+                                  color = target_id,
+                                  alpha = as.factor(water_speed_binary),
+                                  group = interaction(ppid, target_id, water_speed_binary))) +
+    
+    # Highlight hits (TRUE) with solid points
+    geom_point(data = df_ind %>% filter(target_hit == TRUE),
+               aes(color = target_id),
+               shape = 16, size = 1.5, alpha = 0.9) +
+    
+    # De-emphasize misses (FALSE) with faint hollow circles
+    geom_point(data = df_ind %>% filter(target_hit == FALSE),
+               aes(color = target_id),
+               shape = 1, size = 1.2, alpha = 0.15) +
+    
+    geom_line(size = 1, alpha = 0.8) +
+    facet_wrap(~ppid, ncol = 2) +
+    labs(
+      x = "Trial Number",
+      y = "Min Distance to Target Edge (cm)",
+      color = "Target Size",
+      linetype = "Water Current Active"
+    ) +
+    geom_vline(xintercept = transition_pts, linetype = 'dashed', alpha = 0.6) +
+    theme_minimal(base_size = 13) +
+    coord_cartesian(ylim = c(-1, 50)) +  
+    theme(
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.background  = element_rect(fill = "white", color = NA)
+    ) +
+    scale_color_brewer(palette = "Dark2")
+  
+  # Summary: overall median per trial (collapsing across ppid)
+  med_df_overall <- df %>%
+    group_by(trial_num, target_id, width_order_group, water_speed_binary) %>%
+    summarize(overall_median = median(ball_error, na.rm = TRUE), .groups = "drop")
+  
+  # Create plot for overall median per trial as lines
+  p_overall <- ggplot(med_df_overall, aes(x = trial_num, y = overall_median, 
+                                           color = target_id,
+                                           alpha = as.factor(water_speed_binary),
+                                           group = interaction(target_id, water_speed_binary))) +
+    
+    geom_line(size = 1, alpha = 0.8) +
+    facet_wrap(~width_order_group, ncol = 2) +
+    labs(
+      x = "Trial Number",
+      y = "Overall Median Min Distance to Target Edge (cm)",
+      color = "Target Size",
+      linetype = "Water Current Active"
+    ) +
+    geom_vline(xintercept = transition_pts, linetype = 'dashed', alpha = 0.6) +
+    coord_cartesian(ylim = c(-1, 50)) +  
+    theme_minimal(base_size = 13) +
+    theme(
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.background  = element_rect(fill = "white", color = NA)
+    ) +
+    scale_color_brewer(palette = "Dark2")
+  
+  # Save the plots to separate files
+  ggsave("edge_dist_med_ind.png", p_ind, dpi = 300, width = 16, height = 8, bg = 'white')
+  ggsave("edge_dist_med_overall.png", p_overall, dpi = 300, width = 16, height = 8, bg = 'white')
+  
+  # Show plot to R window
+  return(list(individual = p_ind, overall = p_overall))
+  
+}
+
+plot_min_z_trial_target <- function(df) {
+  # Define target positions to merge with the original data frame
+  target_combos <- data.frame(
+    target_position_x = c(0, 0, -0.5),
+    target_position_z = c(1.5, 1.25, 1.4)
+  )
+  
+  # Merge your original data with the target position combinations
+  df <- merge(df, target_combos)
+  
+  # Create a label for plotting purposes
+  df <- df %>%
+    mutate(target_label = paste0("x=", target_position_x, ", z=", target_position_z),
+           target_label = factor(target_label))
+  
+  # Get the transition points for a vertical line based on water_speed_binary changes
+  transition_pts <- df %>%
+    arrange(trial_num) %>%
+    mutate(water_speed_binary_prev = lag(water_speed_binary)) %>%
+    filter(water_speed_binary != water_speed_binary_prev) %>%
+    pull(trial_num)
+  
+  # Create the ggplot
+  p <- ggplot() +
+    # Plot raw data points for min_pos_from_target_x with colors and shapes defined
+    geom_point(data = df, 
+               aes(x = trial_num, 
+                   y = min_pos_from_target_z, 
+                   color = rev(target_label), 
+                   shape = factor(target_hit)),
+               alpha = 0.6, 
+               size = 2) +
+    # Set a fixed shape for TRUE (circle) and FALSE (x)
+    scale_shape_manual(values = c("FALSE" = 4, "TRUE" = 16)) +
+    geom_line(size = 1, alpha = 0.8) +
+    facet_wrap(~ target_id) +
+    geom_vline(xintercept = transition_pts, linetype = 'dashed', alpha = 0.6) +
+    labs(x = "Trial Number",
+         y = "Minimum Z Position to Target Center") +
+    theme_minimal()
+  
+  # Save the plot to a PNG file
+  ggsave("min_dist_z_target_plot.png", p, width = 12, height = 10, dpi = 300, bg = 'white')
+  
+  # Calculate min and max z distance (min_pos_from_target_z) for cases where target_hit is TRUE
+  z_dist_summary <- df %>%
+    filter(target_hit == TRUE) %>%
+    group_by(target_width) %>%
+    summarize(min_z = min(min_pos_from_target_z, na.rm = TRUE),
+              max_z = max(min_pos_from_target_z, na.rm = TRUE),
+              delta_z = max_z - min_z)
+  
+  # Return both the plot and the summary as a list
+  return(list(plot = p, summary = z_dist_summary))
+}
+
+
+plot_min_x_trial_target <- function(df) {
+  # Define target positions to merge with the original data frame
+  target_combos <- data.frame(
+    target_position_x = c(0, 0, -0.5),
+    target_position_z = c(1.5, 1.25, 1.4)
+  )
+  
+  # Merge your original data with the target position combinations
+  df <- merge(df, target_combos)
+  
+  # Create a label for plotting purposes
+  df <- df %>%
+    mutate(target_label = paste0("x=", target_position_x, ", z=", target_position_z),
+           target_label = factor(target_label))
+  
+  # Get the transition points for a vertical line based on water_speed_binary changes
+  transition_pts <- df %>%
+    arrange(trial_num) %>%
+    mutate(water_speed_binary_prev = lag(water_speed_binary)) %>%
+    filter(water_speed_binary != water_speed_binary_prev) %>%
+    pull(trial_num)
+  
+  # Create the ggplot
+  p <- ggplot() +
+    # Plot raw data points for min_pos_from_target_x with colors and shapes defined
+    geom_point(data = df, 
+               aes(x = trial_num, 
+                   y = min_pos_from_target_x, 
+                   color = rev(target_label), 
+                   shape = factor(target_hit)),
+               alpha = 0.6, 
+               size = 2) +
+    # Set a fixed shape for TRUE (circle) and FALSE (x)
+    scale_shape_manual(values = c("FALSE" = 4, "TRUE" = 16)) +
+    geom_line(size = 1, alpha = 0.8) +
+    facet_wrap(~ target_id) +
+    geom_vline(xintercept = transition_pts, linetype = 'dashed', alpha = 0.6) +
+    labs(x = "Trial Number",
+         y = "Minimum X Position to Target Center") +
+    theme_minimal()
+  
+  # Save the plot to a PNG file
+  ggsave("min_dist_x_target_plot.png", p, width = 12, height = 10, dpi = 300, bg = 'white')
+  
+  # Calculate min and max x distance (min_pos_from_target_x) for cases where target_hit is TRUE
+  x_dist_summary <- df %>%
+    filter(target_hit == TRUE) %>%
+    group_by(target_width) %>%
+    summarize(min_x = min(min_pos_from_target_x, na.rm = TRUE),
+              max_x = max(min_pos_from_target_x, na.rm = TRUE),
+              delta_x = max_x - min_x)
+
+  # Return both the plot and the summary as a list
+  return(list(plot = p, summary = x_dist_summary))
+}
+
+
+```
+
+
+
+## remove practice trials
+```{r}
+combined_df_filt <- filter_practice(combined_df)
+```
+
+
+# all trials by ppid: min distance to edge
+```{r}
+plot_trial_min_dist_ppid(combined_df_filt)
+```
+
+# median distance to edge by group
+```{r}
+plot_trial_median_dist_edge(combined_df_filt)
+```
+
+
+
+# min z and x to target center
+```{r}
+plot_min_pos_to_target <- function(df) {
+  
+    
+  # Define target positions (must include target_id)
+  target_combos <- data.frame(
+    target_id = c("big_target", "medium_target", "small_target"),  
+    target_position_x = c(0, 0, -0.5),
+    target_position_z = c(1.5, 1.25, 1.4)
+  )
+  
+  # Merge to attach target positions to main df
+  df <- merge(df, target_combos)
+  
+  # Create label for color mapping
+  df <- df %>%
+    mutate(
+      target_label = factor(
+        paste0("x=", target_position_x, ", z=", target_position_z),
+        levels = rev(unique(paste0("x=", target_position_x, ", z=", target_position_z)))
+      )
+    )
+  
+p <- ggplot(df, aes(x = min_pos_from_target_x, y = min_pos_from_target_z, color = target_label)) +
+  geom_point(alpha = 0.5, size = 1.2) +
+    # Add one point per target center 
+  geom_point(data = target_combos,
+              aes(x = target_position_x, y = target_position_z),
+              color = "black", shape = 10, size = 1.5, inherit.aes = FALSE) +
+  facet_wrap(~target_id, ncol = 3) +
+  labs(
+    x = "Min X Distance from Target Center (m)",
+    y = "Min Z Distance from Target Center (m)",
+  ) +
+  coord_fixed() +
+  theme_minimal(base_size = 14) +
+  scale_color_brewer(palette = "Dark2")
+
+  ggsave("min_z_x_target_center.png", p, width = 12, height = 6, dpi = 300, bg = 'white')
+  
+  p
+  
+}
+
+# plot final ball pos x,z
+plot_final_ball_pos <- function(df) {
+  
+  # Define target positions (must include target_id)
+  target_combos <- data.frame(
+    target_id = c("big_target", "medium_target", "small_target"),  
+    target_position_x = c(0, 0, -0.5),
+    target_position_z = c(1.5, 1.25, 1.4)
+  )
+  
+  # Merge to attach target positions to main df
+  df <- merge(df, target_combos)
+  
+  # Create label for color mapping
+  df <- df %>%
+    mutate(
+      target_label = factor(
+        paste0("x=", target_position_x, ", z=", target_position_z),
+        levels = rev(unique(paste0("x=", target_position_x, ", z=", target_position_z)))
+      )
+    )
+  
+  # Filter to hits
+  df_hits <- df %>% filter(target_hit == TRUE)
+  
+  # Plot
+  p <- ggplot(df_hits, aes(x = final_ball_pos_x, y = final_ball_pos_z, color = target_label)) +
+    geom_point(alpha = 0.5, size = 1.2) +
+    
+    # Add one point per target center 
+    geom_point(data = target_combos,
+               aes(x = target_position_x, y = target_position_z),
+               color = "black", shape = 10, size = 1.5, inherit.aes = FALSE) +
+    
+    facet_wrap(~target_id, ncol = 3) +
+    coord_fixed() +
+    labs(
+      x = "Final X Position for Ball (m)",
+      y = "Final Z Position for Ball (m)",
+      color = "Target Location"
+    ) +
+    theme_minimal(base_size = 14) +
+    scale_color_brewer(palette = "Dark2")
+  
+  # Save
+  ggsave("final_ball_pos_x_z.png", p, width = 12, height = 6, dpi = 300, bg = 'white')
+  
+  p
+}
+
+plot_min_pos_to_target(combined_df_filt)
+
+```
+
+# plot final ball pos for hits
+```{r}
+plot_final_ball_pos(combined_df_filt)
+```
+
+
+# bar plot for hits and misses
+```{r}
+
+plot_hits_vs_misses <- function(df) {
+  
+  # Ensure target_hit is a factor with clear labels
+  df <- df %>%
+    mutate(target_hit = factor(target_hit,
+                               levels = c(FALSE, TRUE),
+                               labels = c("Miss", "Hit")))
+  
+  # Plot 1: Bar plot with counts by target for each participant (faceted)
+  p1 <- ggplot(df, aes(x = target_id, fill = target_hit)) +
+    geom_bar(position = "dodge") +
+    facet_wrap(~ppid, ncol = 2) +
+    labs(
+      x = "Target",
+      y = "Count",
+      fill = "Outcome"
+    ) +
+    theme_minimal(base_size = 14) +
+    scale_fill_manual(values = c("red", "darkgreen"))
+  
+  # Save the per-participant plot
+  ggsave("hits_vs_misses_ppid.png", p1, width = 12, height = 10, dpi = 300, bg = "white")
+  
+  # Plot 2: Bar plot with counts by target for overall data (not faceted)
+  p2 <- ggplot(df, aes(x = target_id, fill = target_hit)) +
+    geom_bar(position = "dodge") +
+    labs(
+      x = "Target",
+      y = "Count",
+      fill = "Outcome"
+    ) +
+    theme_minimal(base_size = 14) +
+    scale_fill_manual(values = c("red", "darkgreen"))
+  
+  # Save the overall plot
+  ggsave("hits_vs_misses_all.png", p2, width = 12, height = 10, dpi = 300, bg = "white")
+  
+  # Return both plots as a list so you can view them in the R window
+  return(list(per_participant = p1, overall = p2))
+}
+
+
+plot_hits_vs_misses(combined_df_filt)
+
+```
+
+```{r}
+plot_trial_avg_outcome <- function(df) {
+  
+  
+  
+  # Get the transition points for a vertical line based on water_speed_binary changes
+  transition_pts <- df %>%
+    arrange(trial_num) %>%
+    mutate(water_speed_binary_prev = lag(water_speed_binary)) %>%
+    filter(water_speed_binary != water_speed_binary_prev) %>%
+    pull(trial_num)
+  
+
+  # Step 1. Compute per-participant hit rate per trial.
+  df_summary <- df %>%
+    group_by(trial_num, ppid, width_order_group, target_id) %>%
+    summarize(hit = mean(as.numeric(target_hit)))
+  
+  # Step 2. Average across participants for each trial and width_order_group.
+  df_avg <- df_summary %>%
+    group_by(trial_num, width_order_group, target_id) %>%
+    summarize(avg_hit = mean(hit))
+  
+  p <- ggplot(df_avg, aes(x = trial_num, y = avg_hit, color = target_id)) +
+    geom_line(size = 0.5) +
+    geom_vline(xintercept = transition_pts, linetype = 'dashed', alpha = 0.6) +
+    facet_wrap(~ width_order_group, nrow = 1) +
+    scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +  # Add space on either side
+    labs(
+      x = "Trial Number",
+      y = "Average Hit Rate",
+      color = "Target"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(panel.spacing = unit(0.5, "lines"))
+  
+  ggsave("trial_avg_outcome_by_width.png", p, width = 16, height = 8, dpi = 300, bg = "white")
+  return(p)
+}
+
+plot_trial_avg_outcome(combined_df_filt)
+```
+
+
+# hits summary stats:
+```{r}
+ggplot(combined_df_hits, aes(x = launch_angle, y = launch_Speed)) +
+  geom_bin2d(binwidth = c(1, 0.1)) +
+  scale_fill_viridis_c() +
+  facet_grid(~target_id)
+  labs(
+    title = "2D Density of Successful Launches",
+    x = "Launch Angle (°)",
+    y = "Launch Speed (m/s)",
+    fill = "Hit Density"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+# Summarize the data to calculate the median launch angle dev and interquartile range per trial
+plot_trial_med_launchDev_group <- function(df) {
+  
+
+  
+  # Compute transition points globally (if valid for your design)
+  transition_pts_global <- df %>%
+    arrange(trial_num) %>%
+    mutate(water_speed_binary_prev = lag(water_speed_binary)) %>%
+    filter(water_speed_binary != water_speed_binary_prev) %>%
+    pull(trial_num)
+
+  # Summarize the data by our new trial number along with target_id, width_order_group, and ppid.
+  summary_df <- df %>%
+    group_by(trial_num, target_id, width_order_group, ball_error, launch_Speed) %>%
+    summarize(
+      median_dev = median(launch_angle_dev, na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  # Plot the summarized data.
+library(scales)  # for rescale()
+
+p <- ggplot(summary_df, aes(
+    x = trial_num,
+    y = median_dev,
+    color = ball_error,
+    alpha = 10 - rescale(ball_error)  # darker = lower error
+  )) +
+  geom_point(size = 1) +
+  geom_vline(xintercept = transition_pts_global, linetype = 'dashed', alpha = 0.6) +
+  scale_color_viridis_c(option = "plasma", limits = c(0, 0.30), oob = scales::squish) +
+  facet_grid(~width_order_group) +
+  labs(
+    x = "Trial Number",
+    y = "Median Launch Dev (deg)",
+    color = "Launch Speed (m/s)"
+  ) +
+  theme_minimal()
+
+  
+  ggsave("trial_med_dev_by_group.png", p, width = 16, height = 8, dpi = 300, bg = "white")
+  return(p)
+}
+
+
+
+plot_trial_med_launchDev_group(combined_df_filt)
+```
+
+
+```{r}
+# speed
+
+plot_trial_med_speed_group <- function(df) {
+
+
+  
+  # Compute transition points globally (if valid for your design)
+  transition_pts_global <- df %>%
+    arrange(trial_num) %>%
+    mutate(water_speed_binary_prev = lag(water_speed_binary)) %>%
+    filter(water_speed_binary != water_speed_binary_prev) %>%
+    pull(trial_num)
+
+  # Summarize the data by our new trial number along with target_id, width_order_group, and ppid.
+  summary_df <- df %>%
+    group_by(trial_num, target_id, width_order_group, ppid, target_hit) %>%
+    summarize(
+      median_speed = median(launch_Speed, na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  # Plot the summarized data.
+  p <- ggplot(summary_df, aes(x = trial_num, y = median_speed, color = target_id, shape = target_hit)) +
+    geom_point(size = 1) +  # Plot median line.
+    geom_smooth(method = "loess", se = TRUE, span = 0.3) +  
+    geom_vline(xintercept = transition_pts_global, linetype = 'dashed', alpha = 0.6) +
+    facet_grid(~ target_id + width_order_group) +
+    labs(
+      x = "Trial Number",
+      y = "Median Launch Speed (m/s)",
+      color = "Target Condition",
+      fill = "Target Condition"
+    ) +
+    theme_minimal()
+  
+  ggsave("trial_med_speed_by_group.png", p, width = 16, height = 8, dpi = 300, bg = "white")
+  return(p)
+}
+
+
+plot_trial_med_speed_group(combined_df_hits)
+
+```
+
