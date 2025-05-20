@@ -4,7 +4,7 @@ library(dplyr)
 library(ggplot2)
 
 # load participant data
-dat_1 <- read_csv("Data_Summer_25/trial_results_jacob_b.csv")
+dat_1 <- read_csv("Data_Summer_25/trial_results.csv")
 
 
 # DV - distance to center
@@ -24,8 +24,7 @@ dat_1 <- dat_1 %>%
     target_position_x == -0.6 ~ -23.2,
     target_position_x == -0.3 ~ -12.2,
     target_position_x ==  0.3 ~  12.2,
-    target_position_x ==  0.6 ~  23.2,
-    TRUE ~ NA_real_  # fallback in case of other values
+    target_position_x ==  0.6 ~  23.2
   ))
 
 dat_1 <- dat_1 %>%
@@ -38,6 +37,7 @@ dat_1 <- dat_1 %>%
   mutate(target_angle_dev = launch_angle - target_angle_mt) %>%
   ungroup()
 
+### functions
 
 transitions <- function(df) {
   df %>%
@@ -48,11 +48,35 @@ transitions <- function(df) {
     rename(xintercept = trial_num)
 }
 
+split_and_save <- function(df, col) {
+  # turn the unquoted col into a string
+  col_name <- deparse(substitute(col))
+  
+  # pull unique levels
+  levels <- unique(df[[col_name]])
+  
+  # loop and assign
+  for (lev in levels) {
+    subset_df <- df[df[[col_name]] == lev, ]
+    
+    # add adjusted target specific trial num
+    subset_df$trial_num_target <- seq_len(nrow(subset_df))
+    
+    assign(
+      paste0(col_name, "_", make.names(lev)),
+      subset_df,
+      envir = .GlobalEnv
+    )
+  }
+}
+
+
+split_and_save(dat_1, target_position_x)
 
 transition_pts <- transitions(dat_1)
 transition_pts
 
-# figures
+### figures
 
 
 # min dist to center
@@ -64,8 +88,9 @@ plot_trial_min_dist_ppid <- function(df) {
     y = ball_dist_to_center_cm,
     group = ppid
   )) +
-    geom_point(aes(color = factor(target_position_x)), alpha = 0.8, size = 1) +
+    geom_line(aes(color = factor(target_position_x)), alpha = 0.8, size = 1) +
     facet_wrap(~ppid, ncol = 2) +
+    facet_wrap(~target_position_x) +
     geom_vline(
       data = transition_pts,
       aes(xintercept = xintercept, color = factor(water_speed_binary)),
@@ -91,7 +116,7 @@ plot_trial_min_dist_ppid(dat_1)
 
 # plot x and z pos
 
-# plot final ball pos x,z
+# plot closest ball pos x,z
 plot_closest_xz_pos <- function(df) {
   
   # Create label for color mapping
@@ -151,4 +176,44 @@ ggplot(dat_1, aes(x = target_angle_dev, y = launch_Speed, color = ball_dist_to_c
   geom_point() +  
   facet_wrap(~target_position_x, ncol = 2) +
   theme_minimal(base_size = 18)
+
+
+
+
+# min dist to center per target df
+plot_target_trial_closest_point <- function(df) {
+  
+  # Plot
+  p <- ggplot(df, aes(
+    x = trial_num_target,
+    y = ball_dist_to_center_cm
+  )) +
+    geom_line(aes(color = factor(target_position_x)), alpha = 0.8, size = 1) +
+    facet_wrap(~ppid, ncol = 2) +
+    geom_vline(
+      data = transition_pts,
+      aes(xintercept = xintercept, color = factor(water_speed_binary)),
+      linetype = "dashed",
+      alpha = 0.6, size = 1
+    ) +
+    scale_color_manual(
+      values = c(
+        "-0.6" = "red", "-0.3" = "orange", "0.3" = "blue", "0.6" = "purple",
+        "0" = "black", "1" = "dodgerblue"  # for water_speed_binary
+      ),
+      name = "Target X / Water Speed"
+    )
+  
+
+  return(p)
+}
+# plot figures
+plot_target_trial_closest_point(target_position_x_X.0.3)
+plot_target_trial_closest_point(target_position_x_X.0.6)
+
+plot_target_trial_closest_point(target_position_x_X0.3)
+plot_target_trial_closest_point(target_position_x_X0.6)
+
+
+
 
